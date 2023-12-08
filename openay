@@ -1,0 +1,90 @@
+#include <stdio.h>
+#include "pico/stdlib.h"
+#include "hardware/gpio.h"
+// Asumiendo que existen bibliotecas para manejar Wi-Fi y OLED
+#include "wifi_manager.h"
+#include "oled_display.h"
+#include "http_client.h"
+
+// Definiciones y variables globales
+#define BUTTON_PIN 15  // Asegúrate de cambiar esto por el pin que estás usando
+
+// Información de la red Wi-Fi
+const char *ssid = "izz";
+const char *password = "your_wifi_password";
+
+// Información para la API de OpenAI
+const char *host = "api.openai.com";
+const char *endpoint = "/v1/engines/text-davinci-002/completions";
+const char *api_key = "your_openai_api_key";
+
+// Prototipos de funciones
+void handle_button_press(uint gpio, uint32_t events);
+void send_prompt_to_chatgpt(const char *prompt);
+void display_response(const char *response);
+
+int main() {
+    stdio_init_all();
+    gpio_init(BUTTON_PIN);
+    gpio_set_dir(BUTTON_PIN, GPIO_IN);
+    gpio_pull_up(BUTTON_PIN);
+
+    // Configurar interrupción para el botón
+    gpio_set_irq_enabled_with_callback(BUTTON_PIN, GPIO_IRQ_EDGE_FALL, true, &handle_button_press);
+
+    // Inicializar Wi-Fi
+    wifi_manager_init(ssid, password);
+
+    // Inicializar OLED
+    oled_display_init();
+
+    // Loop principal
+    while (1) {
+        tight_loop_contents();
+    }
+}
+
+// Manejador de la interrupción del botón
+void handle_button_press(uint gpio, uint32_t events) {
+    // Debounce simple
+    static absolute_time_t last_press_time;
+    if (absolute_time_diff_us(last_press_time, get_absolute_time()) < 500000) {
+        return; // Si se presiona el botón en menos de 500ms, ignorar
+    }
+    last_press_time = get_absolute_time();
+
+    // Aquí es donde enviarías el prompt a la API de ChatGPT
+    const char *prompt = "Hello, what's the weather today?";
+    send_prompt_to_chatgpt(prompt);
+}
+
+// Envía el prompt a la API de ChatGPT y maneja la respuesta
+void send_prompt_to_chatgpt(const char *prompt) {
+    if (wifi_manager_is_connected()) {
+        // Preparar los headers y el cuerpo de la solicitud
+        const char *headers[] = {
+            "Content-Type: application/json",
+            "Authorization: Bearer " + api_key
+        };
+        char body[256];
+        snprintf(body, sizeof(body), "{\"prompt\": \"%s\", \"max_tokens\": 50}", prompt);
+
+        // Enviar la solicitud POST
+        char *response = http_post(host, endpoint, headers, body);
+        if (response) {
+            display_response(response);
+            free(response);
+        }
+    } else {
+        oled_display_message("Wi-Fi not connected");
+    }
+}
+
+// Despliega la respuesta en el OLED
+void display_response(const char *response) {
+    // Aquí asumimos que la respuesta es texto plano. Si la API devuelve JSON, tendrás que parsearlo.
+    oled_display_message(response);
+}
+
+
+/*
