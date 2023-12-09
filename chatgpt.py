@@ -2,7 +2,7 @@ import urequests
 import time
 
 # Información para la API de OpenAI
-api_key = "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"
+api_key = "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"
 url = "https://api.openai.com/v1/engines/text-davinci-002/completions"
 
 # Función para enviar el prompt a ChatGPT
